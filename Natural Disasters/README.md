@@ -1,5 +1,5 @@
 # Data Visualization of Natural Disasters
-Below are examples of data visualization of time Series data for Natural Disasters per year from years 1900 to 2021.
+Below are examples from a quick project done to visualize time Series data for Natural Disasters per year from years 1900 to 2021.
 
 ### Number of Natural Disasters per Disaster Subgroup
 
