@@ -1,0 +1,498 @@
+---
+title: "International Students Demographics"
+title-slide-attributes:
+    data-background-image: pic1.jpg
+    data-background-size: 55%
+    data-background-position: bottom 10%
+    data-background-opacity: "0.5"
+author: "Lucy Moctezuma Tan"
+format: 
+  revealjs:
+    margin: 0.05
+    slide-number: true
+    code-block-height: 300px
+    self-contained: true
+css: style.css
+editor: visual
+---
+
+```{r}
+#| echo: false
+setwd("C:/Users/lucyl/Desktop/LEARNING/#00_MASTERS/STAT 651 - Data Visualization/Final Project")
+library(tidyverse)
+library(lubridate)
+library(leaflet)
+library(tidygeocoder)
+library(RColorBrewer)
+library(plotly)
+library(scales)
+library(gganimate)
+library(sf)
+library(htmltools)
+library(ggwordcloud)
+```
+
+## [Data Sources:]{.smaller}
+::::::{.rows}
+:::::{.row height="70%"}
+::::{.columns}
+:::{.incremental .column style="width: 40%; font-size: 65%;"}
+6 csv files from [kaggle](https://www.kaggle.com/datasets/webdevbadger/international-student-demographics){preview-link="false"} about International Student Demographics:
+
+-   academic.csv
+-   academic_detail.csv
+-   source_of_fund.csv
+-   status.csv
+-   origin.csv
+-   field_of_study.csv
+:::
+::: {.column width="60%"}
+```{r}
+#| out-width: "600"
+#| out-height: "400"
+
+# loading and cleaning up 3 datasets
+status <- read.csv("status.csv", header = TRUE)
+status <- status |>
+          mutate(year = as.numeric(str_remove(year,"/.."))) |>
+          filter(year >= 2007)  
+academic <- read.csv("academic.csv", header=TRUE)
+academic <- academic |>
+            mutate(year = as.numeric(str_remove(year,"/.."))) |>
+            filter(year >= 2007)
+
+academic_det <- read.csv("academic_detail.csv", header= TRUE)
+academic_det<-academic_det |>
+              mutate(year = as.numeric(str_remove(year,"/.."))) |>
+              filter(year >= 2007) |>
+              pivot_longer(cols=students)|>
+              pivot_wider(names_from="academic_level")|>
+              group_by(year)|> 
+              summarise(`Associate's`= sum(`Associate's`, na.rm = TRUE),
+                        `Bachelor's`= sum(`Bachelor's`, na.rm = TRUE),
+                        `Master's`= sum(`Master's`, na.rm = TRUE),
+                         Doctoral = sum(Doctoral, na.rm = TRUE),
+                         Professional = sum(Professional, na.rm = TRUE),
+                        `Graduate, Unspecified` = sum(`Graduate, Unspecified`, na.rm = TRUE),
+                        `Non-Degree, Intensive English`=sum(`Non-Degree, Intensive English`, na.rm = TRUE),
+                        `Non-Degree, Other` = sum(`Non-Degree, Other`, na.rm = TRUE),
+                         OPT = sum(OPT, na.rm = TRUE)) 
+
+# Adding all variables we want in all loaded data in our final plot
+tab1 <- academic_det |>
+        mutate(Int_students = rowSums(academic_det[,c("Associate's", "Bachelor's", "Master's", "Doctoral","Professional", 
+                                       "Graduate, Unspecified", "Non-Degree, Intensive English",  
+                                       "Non-Degree, Other", "OPT")]),
+               US_students_p = academic$students/(academic$us_students + academic$students),
+               Female = status$female,
+               Male = status$male,
+               Married = status$married,
+               Single = status$single,
+               Full = status$full_time,
+               Part = status$part_time,
+               F1 = status$visa_f,
+               J1 = status$visa_j,
+               `Other visa` = status$visa_other)
+
+# Creating plot
+p_plot<-tab1|>
+        rename(`Prop.Int.Students` = US_students_p)|>
+        ggplot(aes(x=year, y=`Prop.Int.Students`)) +
+        geom_line(color="slateblue", size=1, linetype=2) +
+        scale_y_continuous(labels = scales::percent_format(accuracy = 0.01)) +
+        ggtitle("Percentage of International Students from all students in US") +
+        theme_minimal()+ theme(axis.title.y=element_blank())
+
+ggplotly(p_plot)
+  
+```
+:::
+::::
+:::::
+:::::{.row style="height: 30%; font-size: 65%;"}
+Map data was downloaded using the command:
+```{r}
+#| echo: true
+
+# Download the shapefile from github , unzip and place in your directory
+download.file(
+  "https://raw.githubusercontent.com/holtzy/R-graph-gallery/master/DATA/world_shape_file.zip",
+  destfile = "DATA/world_shape_file.zip")
+```
+:::::
+::::::
+
+
+## [International Student Counts per Category]{.r-fit-text}
+
+```{r}
+#| out-height: "600"
+
+# Hexadecimal color specification 
+colorsp<- brewer.pal(n = 9, name = "Paired")
+
+# Creating menu updates
+updatemenus <- list(
+  list(
+    active = -1,
+    type = 'buttons',
+    direction = "right",
+    xanchor = 'center',
+    yanchor = "top",
+    pad = list('r'= 0, 't'= 10, 'b' = 10),
+    x = 0.5,
+    y = -0.05,
+    buttons = list(
+      list(
+        label = "Degree",
+        method = "update",
+        args = list(list(visible = c(FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE)),
+                    list(title = "Degree Levels Breakdown"))),
+      list(
+        label = "Gender",
+        method = "update",
+        args = list(list(visible = c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE)),
+                    list(title = "Gender Breakdown"))),
+      list(
+        label = "Marital Status",
+        method = "update",
+        args = list(list(visible = c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, FALSE, FALSE, FALSE, FALSE)),
+                    list(title = "Marital Status Breakdown"))),
+      list(
+        label = "Visa Status",
+        method = "update",
+        args = list(list(visible = c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, FALSE)),
+                    list(title = "Visa Status Breakdown"))),
+       list(
+        label = "Student Status",
+        method = "update",
+        args = list(list(visible = c(TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE)),
+                    list(title = "Student Status Breakdown")))
+  )))
+
+
+# Creating Line plots
+fig <- tab1 |> plot_ly(type = 'scatter', mode = 'lines')
+
+# Adding each lineplot
+fig <- fig |>
+    # Adding line plots that Correspond to the Degree levels
+       # Lines at Bachelors Level
+       add_lines(x=~year, y=~`Associate's`, name="Associates", line=list(color=colorsp[1]), legendgroup="g1", legendgrouptitle_text='Bachelors Level') |>
+       add_lines(x=~year, y=~`Bachelor's`, name="Bachelors", line=list(color=colorsp[2]), legendgroup="g1", legendgrouptitle_text='Bachelors Level') |>
+       # Lines at Graduate Level
+       add_lines(x=~year, y=~`Master's`, name="Masters", line=list(color=colorsp[3]), legendgroup="g2", legendgrouptitle_text='Graduate Level') |>
+       add_lines(x=~year, y=~Doctoral, name="Doctoral", line=list(color=colorsp[4]), legendgroup="g2", legendgrouptitle_text='Graduate Level') |>
+       add_lines(x=~year, y=~Professional, name="Professional", line=list(color=colorsp[5]), legendgroup="g2", legendgrouptitle_text='Graduate Level') |>
+       add_lines(x=~year, y=~`Graduate, Unspecified`, name="Graduate Unspecified", line=list(color=colorsp[6]),legendgroup="g2", legendgrouptitle_text='Graduate Level') |>
+       # Lines at Non Degree
+       add_lines(x=~year, y=~`Non-Degree, Intensive English`, name="Intensive English", line=list(color=colorsp[7]), legendgroup="g3", legendgrouptitle_text='Non-Degree Level') |>
+       add_lines(x=~year, y=~`Non-Degree, Other`, name="Non Degree, Other", line=list(color=colorsp[8]), legendgroup="g3", legendgrouptitle_text='Non-Degree Level') |>
+       # Lines at OPT
+       add_lines(x=~year, y=~OPT, name="OPT", line=list(color=colorsp[9])) |>
+    
+    # Adding lineplot that correspond to Gender
+       add_lines(x=~year, y=~Male, name="Males", line=list(color=colorsp[2])) |>
+       add_lines(x=~year, y=~Female, name="Females", line=list(color=colorsp[6])) |>
+  
+    # Adding lineplot that corresponds to Marital Status
+       add_lines(x=~year, y=~Single, name="Single", line=list(color=colorsp[7])) |>
+       add_lines(x=~year, y=~Married, name="Married", line=list(color=colorsp[2])) |>
+  
+    # Adding lineplot that corresponds to Visa Status
+       add_lines(x=~year, y=~F1, name="F1 Visa", line=list(color=colorsp[2])) |>
+       add_lines(x=~year, y=~J1, name="J1 Visa", line=list(color=colorsp[6])) |>
+       add_lines(x=~year, y=~`Other visa`, name="Other Visas", line=list(color=colorsp[7])) |>
+
+    # Adding lineplot that corresponds to Student Status
+       add_lines(x=~year, y=~Full, name="Full Time Student", line=list(color=colorsp[4])) |>
+       add_lines(x=~year, y=~Part, name="Part Time Student", line=list(color=colorsp[3])) |>
+
+    # adding layout details
+       layout(title = "Number of International Students from 2007 to 2022", 
+              showlegend=TRUE,
+              xaxis=list(title="Year"),
+              hovermode = "x unified",
+              yaxis=list(title="Student Count"),
+              legend = list(x = 100, y = 0.5),
+              margin = list(t=100),
+              updatemenus = updatemenus)
+
+fig
+```
+
+## [International Student Funding Sources (2007-2022)]{.r-fit-text}
+
+```{r}
+#| out-height: "550"
+
+# Loading data
+fund <- read.csv("source_of_fund.csv", header=TRUE)
+fdf <- fund |>
+  mutate(year = as.integer(str_remove(year,"/..")),
+         source_type = factor(source_type, level=c("U.S.", "International", "Other")),
+         `Source of Fund` = factor(source_of_fund, level=c("Personal and Family", "Foreign Government or University", "Foreign Private Sponsor", "International Organization",
+                                                         "Current Employment", "U.S. College or University", "U.S. Government", "U.S. Private Sponsor", "Other Sources")),
+         academic_type = factor(academic_type, level=c("Non-Degree", "Undergraduate", "Graduate", "OPT"))) |>
+  filter(year >=2007)|>
+  group_by(year)
+
+plotfunding <-fdf |>
+              ggplot(aes(y=factor(year), x=students, fill=`Source of Fund`)) +
+              geom_bar(position="stack", stat="identity") +
+              coord_flip() +
+              facet_grid(source_type~academic_type, scales="free") +
+              labs(x='Student Count', y='Years') +
+              theme_light() +
+              scale_x_continuous(labels = comma)+
+              theme(legend.text=element_text(size=9), legend.position = "top", 
+                    axis.text.x = element_text(size=10, angle=90), axis.text.y = element_text(size=12),
+                    legend.title=element_blank(), strip.text = element_text(size = 12), axis.title.x=element_blank())
+              
+plotfunding      
+```
+
+## [Where do International Students come from?]{.r-fit-text}
+
+```{r}
+#|warning: false
+#|message: false
+
+# Download the shapefile from github
+download.file(
+  "https://raw.githubusercontent.com/holtzy/R-graph-gallery/master/DATA/world_shape_file.zip",
+  destfile = "DATA/world_shape_file.zip"
+)
+
+# Read the shape file as a df object
+world_sf <- read_sf(paste0(
+  getwd(),"/TM_WORLD_BORDERS_SIMPL-0.3.shp"
+))
+
+world_sf <- world_sf %>%
+  mutate(POP2005 = ifelse(POP2005 == 0, NA, round(POP2005 / 1000000, 2)))
+
+or_df <- read.csv("origin.csv", header=TRUE)
+country <-  or_df |>
+            mutate(year = as.numeric(str_remove(year,"/.."))) |>
+            filter(year >=2007)
+
+#Making names match WORLD_SF data
+country<- country|> mutate(origin = case_when(origin == "South Korea" ~ "Korea, Republic of",
+                                                origin == "North Korea" ~ "Korea, Democratic People's Republic of",
+                                                origin == "Congo, Dem. Rep. of the (Kinshasa)" ~ "Democratic Republic of the Congo",
+                                                origin == "Congo, Republic of the (Brazzaville)" ~ "Congo",
+                                                origin == "Palestinian Territories" ~ "Palestine",
+                                                origin == "Côte d’Ivoire" ~ "Cote d'Ivoire",
+                                                origin == "Czechia/Czech Republic" ~ "Czech Republic",
+                                                origin == "GuineaBissau" ~ "Guinea-Bissau",
+                                                origin == "Holy See" ~ "Holy See (Vatican City)",
+                                                origin == "Vietnam" ~ "Viet Nam",
+                                                origin == "Syria" ~ "Syrian Arab Republic",
+                                                origin == "Laos" ~ "Lao People's Democratic Republic",
+                                                origin == "Iran" ~ "Iran (Islamic Republic of)",
+                                                origin == "Yugoslavia, Former" ~ "The former Yugoslav Republic of Macedonia",
+                                                origin == "North Macedonia" ~ "The former Yugoslav Republic of Macedonia",
+                                                origin == "TimorLeste" ~ "Timor-Leste",
+                                                origin == "Cabo Verde" ~ "Cape Verde",
+                                                origin == "Gambia, The" ~ "Gambia",
+                                                origin == "Brunei" ~ "Brunei Darussalam",
+                                                origin == "Burma/Myanmar" ~ "Burma",
+                                                origin == "Libya" ~ "Libyan Arab Jamahiriya",
+                                                origin == "Tanzania" ~ "United Republic of Tanzania",
+                                                origin == "Moldova" ~ "Republic of Moldova",
+                                                origin == "St. Kitts and Nevis" ~ "Saint Kitts and Nevis",
+                                                origin == "Falkland Islands/Islas Malvinas" ~ "Falkland Islands (Malvinas)",
+                                                origin == "Turks and Caicos" ~ "Turks and Caicos Islands", 
+                                                origin == "St. Lucia" ~ "Saint Lucia",
+                                                origin == "Sint Maarten" ~ "Saint Martin",
+                                                origin == "St. Vincent and the Grenadines" ~ "Saint Vincent and the Grenadines",
+                                                origin == "São Tomé and Príncipe" ~ "Sao Tome and Principe", 
+                                                origin == "Eswatini" ~ "Swaziland",
+                                                origin == "Micronesia, Federate States of " ~ "Micronesia, Federated States of",
+                                                origin == "Wallis and Futuna" ~ "Wallis and Futuna Islands",
+                                                origin == "Marshall Islands, Republic of the" ~ "Marshall Islands",
+                                                TRUE ~ origin))
+
+country_comb <-country|>
+                group_by(origin)|>
+                summarize(Total=sum(students))|>
+                rename(NAME = origin)
+
+# joining dataframes
+data_merged <- left_join(world_sf, country_comb, by = "NAME")
+
+# Title of map
+tag.map.title <- tags$style(HTML("
+.leaflet-control.map-title {
+transform: translate(50%,50%);
+position: fixed !important;
+left: 20%;
+text-align: center;
+padding-left: 10px;
+padding-right: 10px;
+background: rgba(255,255,255,0.75);
+font-weight: bold;
+font-size: 20px;
+}
+"))
+
+title <- tags$div(
+  tag.map.title, HTML("Number of International Students (2007-2022)")
+)
+
+
+# Creating a color palette with handmade bins
+mybins <- c(0, 5000, 10000, 20000, 40000, 80000, 160000, 320000, 640000, Inf) # On the Thousand scale
+mypalette <- colorBin(
+  palette = "YlOrBr", domain = data_merged$Total,
+  na.color = "transparent", bins = mybins
+)
+
+# Preparing text for tooltips
+mytext <- paste(
+   "<b>",data_merged$NAME,"</b>","<br/>",
+   "Population: ", data_merged$POP2005, "M","<br/>",
+   "Area: ", data_merged$AREA,"<br/>",
+   "Students in USA: ", data_merged$Total,
+   sep=""
+) |>
+  lapply(htmltools::HTML)
+
+
+# Final Map
+m <- leaflet(data_merged)|>
+     addTiles()|>
+     setView(lat=10, lng=0, zoom=2) |>
+     addPolygons(
+       fillColor = ~mypalette(Total),
+       stroke=TRUE,
+       fillOpacity = 0.7, 
+       color="white",
+       weight = 0.3,
+       label = mytext,
+       labelOptions = labelOptions(
+         style = list("font-weight" = "normal", padding = "3px 8px"),
+         textsize = "13px",
+         direction = "auto"
+       )
+     ) |>
+  addLegend(
+    pal=mypalette, values = ~Total, opacity=0.7,
+    title="International Students", position="bottomleft")|>
+  addControl(title, position ="topleft", className = "map-title")
+m
+```
+
+## [Popular Academic Levels per Country]{.r-fit-text .column style="font-size: 50%;"}
+:::::{.rows}
+::: {.row height="100%"}
+The stacked bar chart shows the 10 countries that send most students to the US. 
+
+```{r}
+#| out-height: "500"
+#| out-width: "800"
+countries<- country|> select(-c(origin_region))|>
+            pivot_wider(names_from=academic_type,
+                        values_from = students, 
+                        id_cols = c(year,origin),
+                        values_fn= first)|>
+            group_by(origin)|>
+            summarize(Non_Degree=sum(`Non-Degree`),Undergraduate=sum(Undergraduate),Graduate=sum(Graduate), OPT=sum(OPT)) |>
+            mutate(TOTAL = Non_Degree + Undergraduate + Graduate + OPT) |>
+            mutate(Non_Degree = Non_Degree*100/TOTAL , Undergraduate= Undergraduate*100/TOTAL, Graduate=Graduate*100/TOTAL, OPT=OPT*100/TOTAL)|>
+            arrange(desc(TOTAL))|>
+            head(10) |>
+            select(-c(TOTAL)) 
+
+propbar <-  plot_ly(countries,x=~origin, y=~Non_Degree, type="bar", name ="Non-Degree",
+                    hovertemplate = paste('<b>Percentage</b>: %%{y:.2f}',
+                                          '<br><b>Country</b>: %{x}<br>'))
+propbar <-  propbar |> add_trace(y=~Undergraduate, type="bar", name ="Undergraduate", 
+                                 hovertemplate = paste('<b>Percentage</b>: %%{y:.2f}',
+                                                       '<br><b>Country</b>: %{x}<br>'))
+propbar <-  propbar |> add_trace(y=~Graduate, type="bar", name ="Graduate",
+                                 hovertemplate = paste('<b>Percentage</b>: %%{y:.2f}',
+                                                       '<br><b>Country</b>: %{x}<br>'))
+propbar <-  propbar |> add_trace(y=~OPT, type="bar", name ="OPT",
+                                 hovertemplate = paste('<b>Percentage</b>: %%{y:.2f}',
+                                                       '<br><b>Country</b>: %{x}<br>'))
+propbar <- propbar |> layout(yaxis = list(title = 'Percentages'), xaxis = list(title= "Countries"), 
+                             barmode = 'stack', legend = list(x = 100, y = 0.5))
+
+propbar 
+```
+:::
+::::
+
+## [Most Popular Fields of Study and Majors]{.r-fit-text}
+:::::{.rows}
+::: {.row height="100%"}
+```{r}
+
+fstudy <- read.csv("field_of_study.csv", header=TRUE)
+majorstudy <- fstudy |> mutate(year = as.numeric(str_remove(year,"/.."))) |>
+          filter(year >=2007) |>
+          group_by(major)|>
+          summarize(n=sum(students, na.rm = TRUE))
+
+set.seed(42)
+majorstudy |> 
+  filter(n>200000)|>
+  ggplot(aes(label = major, size = sqrt(n), color = sqrt(n))) +
+    geom_text_wordcloud(area_corr = TRUE, eccentricity = .35) +
+  scale_size_area(max_size = 50, trans = power_trans(1/.7)) +
+    scale_color_gradient(low = "slateblue", high = "orange") +
+    theme_minimal()
+```
+:::
+::::
+
+## [Field of Study trends from 2007 to 2022]{.r-fit-text}
+::::{.rows}
+:::{.row height="100%"}
+```{r}
+set.seed(7260)
+# preparing dataset
+fields <- fstudy|> mutate(year = as.numeric(str_remove(year,"/.."))) |>
+          filter(year >=2007) |>
+          group_by(year,field_of_study)|>
+          summarise(total = sum(students))|> mutate(year=factor(year))|> 
+          pivot_wider(names_from= field_of_study,
+                        values_from = total, 
+                        id_cols = c(year),
+                        values_fn= first)|>
+          replace_na(list(`Other Fields of Study`= 0)) |>
+          mutate(sum = rowSums(across(where(is.numeric))))|>
+          mutate(across(c(1:15),.fns = ~./sum))
+
+# creating colors
+n <- 15
+qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+col_vector = unlist(mapply(brewer.pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
+col=sample(col_vector, n)
+
+
+## Define a blank plot with the desired layout (don't add any traces yet)
+p <- plot_ly(type="scatter",colors = col) |>
+  layout(xaxis = list(title = ""),
+         yaxis = list (title = "Yearly Percentage fields of study") )
+
+## Make sure our list of columns to add doesn't include 
+ToAdd <- setdiff(colnames(fields),c("year","sum"))
+
+## Add the traces one at a time
+for(i in ToAdd){
+  p <- p |> add_trace(x = fields[["year"]], y =fields[[i]], name = i,
+                       mode = 'line',
+                       line = list(width = 4),
+                       color = i)
+}
+
+p <- p |> layout(legend = list(x = 100, y = 0.5))
+p
+```
+:::
+::::
+
+

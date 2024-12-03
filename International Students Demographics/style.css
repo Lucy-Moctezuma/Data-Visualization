@@ -1,0 +1,16 @@
+.title {
+    font-size: 70px !important;
+    color: rgb(26, 24, 29) !important;
+    position: absolute !important;
+    top: 15px !important;
+    padding-bottom: 380px !important;
+  }
+  
+  .quarto-title-author-name {
+    font-size: 30px !important;
+    color: rgb(80, 80, 88) !important;
+    position: absolute !important;
+    top: 200px !important;
+    right: 40% !important;
+    padding-bottom: 380px !important;
+  }
